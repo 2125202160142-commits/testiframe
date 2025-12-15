@@ -145,18 +145,18 @@ Highcharts.chart('container', {
     },
 
     title: {
-        text: 'Live Set & RealLevel'
+        text: 'Biểu đồ PID'
     },
 
     xAxis: {
-        type: 'datetime',
+        type: 'Thời Gian',
         tickPixelInterval: 150,
         maxPadding: 0.1
     },
 
     yAxis: {
         title: {
-            text: 'Value'
+            text: 'Mực Nước'
         },
         min: 0,
         max: 130,
@@ -178,13 +178,13 @@ Highcharts.chart('container', {
 
     series: [
         {
-            name: 'Set',
+            name: 'Mực nước mong muốn',
             lineWidth: 2,
             color: Highcharts.getOptions().colors[6],
             data: setData
         },
         {
-            name: 'RealLevel',
+            name: 'Mực nước thực tế',
             lineWidth: 2,
             color: Highcharts.getOptions().colors[2],
             data: realLevelData
