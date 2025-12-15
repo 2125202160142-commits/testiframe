@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Sensor Data Chart</title>
+    <title>Live Set & RealLevel Data Chart</title>
 
     <script src="https://code.highcharts.com/highcharts.js"></script>
     <script src="https://code.highcharts.com/modules/exporting.js"></script>
@@ -13,10 +13,27 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
 
     <style>
+        .highcharts-figure,
+        .highcharts-data-table table {
+            min-width: 320px;
+            max-width: 1000px;
+            margin: 1em auto;
+        }
+
         #container {
             height: 400px;
-            max-width: 1000px;
-            margin: auto;
+        }
+
+        .cell {
+            height: 220px;
+        }
+
+        .highcharts-tooltip {
+            font-size: 20px;
+        }
+
+        .highcharts-area {
+            fill-opacity: 0.3;
         }
     </style>
 </head>
@@ -25,71 +42,96 @@
 
 <figure class="highcharts-figure">
     <div id="container"></div>
+    <p class="highcharts-description">
+        Chart showing Set & RealLevel data updating every second.
+    </p>
     <button id="exportButton">Export to Excel</button>
 </figure>
+
+<input type="checkbox" id="set"></input>
+<input type="checkbox" id="realLevel"></input>
 
 <script>
 /* ================= ERA WIDGET ================= */
 const eraWidget = new EraWidget();
 
-let config1 = null;
-let config2 = null;
+let setConfig = null;
+let realLevelConfig = null;
 
-let sensor1Value = 0;
-let sensor2Value = 0;
+let setValue = 0;
+let realLevelValue = 0;
 
-const dataBuffer1 = [];
-const dataBuffer2 = [];
+const setBuffer = [];
+const realLevelBuffer = [];
 
 eraWidget.onConfiguration((configuration) => {
-    config1 = configuration.realtime_configs[0];
-    config2 = configuration.realtime_configs[1];
+    setConfig = configuration.realtime_configs[0];
+    realLevelConfig = configuration.realtime_configs[1];
 });
 
 eraWidget.onValues((values) => {
-    if (config1) sensor1Value = values[config1.id].value;
-    if (config2) sensor2Value = values[config2.id].value;
+    const setInput = document.getElementById('set');
+    const realLevelInput = document.getElementById('realLevel');
+
+    if (setConfig) {
+        setValue = values[setConfig.id].value;
+        setInput.checked = setValue > 0;
+    }
+
+    if (realLevelConfig) {
+        realLevelValue = values[realLevelConfig.id].value;
+        realLevelInput.checked = realLevelValue > 0;
+    }
 });
 
 eraWidget.ready();
 
-/* ================= INIT DATA ================= */
-function initData() {
-    const data = [];
-    const time = (new Date()).getTime();
-
-    for (let i = -19; i <= 0; i++) {
-        data.push({
-            x: time + i * 1000,
-            y: 0
-        });
-    }
-    return data;
-}
-
-const data1 = initData();
-const data2 = initData();
-
-/* ================= CHART ================= */
+/* ================= CHART LOAD ================= */
 const onChartLoad = function () {
     const chart = this;
-    const series1 = chart.series[0];
-    const series2 = chart.series[1];
+    const setSeries = chart.series[0];
+    const realLevelSeries = chart.series[1];
 
     setInterval(function () {
         const x = (new Date()).getTime();
 
-        // Nếu chưa có sensor2 thật thì demo
-        if (!config2) sensor2Value = Math.random() * 100;
+        setSeries.addPoint([x, setValue], true, true);
+        realLevelSeries.addPoint([x, realLevelValue], true, true);
 
-        series1.addPoint([x, sensor1Value], true, true);
-        series2.addPoint([x, sensor2Value], true, true);
+        setBuffer.push([x, setValue]);
+        realLevelBuffer.push([x, realLevelValue]);
 
-        dataBuffer1.push([x, sensor1Value]);
-        dataBuffer2.push([x, sensor2Value]);
+        // Giữ dữ liệu 30 phút
+        const thirtyMinutesAgo = x - 1800 * 1000;
+        while (setBuffer.length && setBuffer[0][0] < thirtyMinutesAgo) {
+            setBuffer.shift();
+            realLevelBuffer.shift();
+        }
     }, 1000);
 };
 
+/* ================= INIT DATA ================= */
+const setData = (function () {
+    const data = [];
+    const time = (new Date().getTime());
+
+    for (let i = -19; i <= 0; i++) {
+        data.push({ x: time + i * 1000, y: 0 });
+    }
+    return data;
+}());
+
+const realLevelData = (function () {
+    const data = [];
+    const time = (new Date().getTime());
+
+    for (let i = -19; i <= 0; i++) {
+        data.push({ x: time + i * 1000, y: 0 });
+    }
+    return data;
+}());
+
+/* ================= HIGHCHART ================= */
 Highcharts.chart('container', {
     chart: {
         type: 'areaspline',
@@ -103,12 +145,13 @@ Highcharts.chart('container', {
     },
 
     title: {
-        text: 'Live Sensor Data'
+        text: 'Live Set & RealLevel'
     },
 
     xAxis: {
         type: 'datetime',
-        tickPixelInterval: 150
+        tickPixelInterval: 150,
+        maxPadding: 0.1
     },
 
     yAxis: {
@@ -121,8 +164,8 @@ Highcharts.chart('container', {
     },
 
     tooltip: {
-        shared: true,
-        xDateFormat: '%Y-%m-%d %H:%M:%S'
+        headerFormat: '<b>{series.name}</b><br/>',
+        pointFormat: '{point.x:%Y-%m-%d %H:%M:%S}<br/>{point.y:.2f}'
     },
 
     legend: {
@@ -135,33 +178,33 @@ Highcharts.chart('container', {
 
     series: [
         {
-            name: 'Sensor 1',
-            data: data1,
+            name: 'Set',
+            lineWidth: 2,
             color: Highcharts.getOptions().colors[6],
-            fillOpacity: 0.3
+            data: setData
         },
         {
-            name: 'Sensor 2',
-            data: data2,
+            name: 'RealLevel',
+            lineWidth: 2,
             color: Highcharts.getOptions().colors[2],
-            fillOpacity: 0.3
+            data: realLevelData
         }
     ]
 });
 
 /* ================= EXPORT EXCEL ================= */
 document.getElementById('exportButton').addEventListener('click', function () {
-    const rows = dataBuffer1.map((p, i) => ({
+    const rows = setBuffer.map((p, i) => ({
         Time: new Date(p[0]).toLocaleString(),
-        Sensor1: p[1],
-        Sensor2: dataBuffer2[i] ? dataBuffer2[i][1] : ''
+        Set: p[1],
+        RealLevel: realLevelBuffer[i] ? realLevelBuffer[i][1] : ''
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
 
-    XLSX.utils.book_append_sheet(wb, ws, 'Sensor Data');
-    XLSX.writeFile(wb, 'sensor_data.xlsx');
+    XLSX.utils.book_append_sheet(wb, ws, 'Set_RealLevel');
+    XLSX.writeFile(wb, 'Set_RealLevel_Data.xlsx');
 });
 </script>
 
